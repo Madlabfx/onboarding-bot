@@ -7,8 +7,7 @@ app = Flask(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-VIP_LINK = "https://t.me/yourVIPgroup"
-
+VIP_LINK = "https://t.me/+u6w6KfBGtykxMTYx"
 bot = telebot.TeleBot(TOKEN)
 
 
