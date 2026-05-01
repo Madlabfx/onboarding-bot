@@ -1,6 +1,9 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
+from flask import Flask
+
+app = Flask(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -9,63 +12,64 @@ VIP_LINK = "https://t.me/yourVIPgroup"
 bot = telebot.TeleBot(TOKEN)
 
 
-# ================= START =================
+# ================= TELEGRAM BOT =================
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.send_message(
         message.chat.id,
-        "Welcome to Madlab Trading 🚀\n\n"
-        "To access VIP signals:\n\n"
-        "1. Open a broker account\n"
-        "2. Deposit minimum $300\n"
-        "3. Send screenshot using /submit\n\n"
-        "BlackBull (NZ only):\n"
-        "https://blackbull.com/en/live-account/?cmp=5p0z2d3q&refid=6509\n\n"
-        "HeroFX:\n"
-        "https://herofx.co/?partner_code=4649955"
+        "Welcome 🚀\n\n"
+        "Open broker + deposit $300 + send screenshot via /submit"
     )
 
 
-# ================= SUBMIT =================
 @bot.message_handler(commands=['submit'])
 def submit(message):
-    bot.send_message(message.chat.id, "Please send your screenshot 📸")
+    bot.send_message(message.chat.id, "Send your screenshot 📸")
 
 
-# ================= HANDLE PHOTO =================
 @bot.message_handler(content_types=['photo'])
-def handle_photo(message):
+def photo(message):
     file_id = message.photo[-1].file_id
 
     markup = InlineKeyboardMarkup()
-    approve = InlineKeyboardButton("✅ Approve", callback_data=f"approve_{message.chat.id}")
-    decline = InlineKeyboardButton("❌ Decline", callback_data=f"decline_{message.chat.id}")
-    markup.add(approve, decline)
+    markup.add(
+        InlineKeyboardButton("✅ Approve", callback_data=f"approve_{message.chat.id}"),
+        InlineKeyboardButton("❌ Decline", callback_data=f"decline_{message.chat.id}")
+    )
 
     bot.send_photo(
         ADMIN_ID,
         file_id,
-        caption=f"New verification request\nUser: {message.chat.id}",
+        caption=f"User: {message.chat.id}",
         reply_markup=markup
     )
 
-    bot.send_message(message.chat.id, "Screenshot received ✅ under review")
+    bot.send_message(message.chat.id, "Received ✅")
 
 
-# ================= ADMIN ACTION =================
 @bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
+def callback(call):
     action, user_id = call.data.split("_")
     user_id = int(user_id)
 
     if action == "approve":
-        bot.send_message(user_id, f"Approved 🎉\n\nVIP Access:\n{VIP_LINK}")
-        bot.answer_callback_query(call.id, "Approved")
-
-    elif action == "decline":
-        bot.send_message(user_id, "Not approved ❌ Please resend clearer proof.")
-        bot.answer_callback_query(call.id, "Declined")
+        bot.send_message(user_id, f"Approved 🎉\n{VIP_LINK}")
+    else:
+        bot.send_message(user_id, "Not approved ❌")
 
 
-# ================= RUN BOT =================
-bot.infinity_polling()
+# ================= KEEP RENDER ALIVE =================
+@app.route("/")
+def home():
+    return "Bot is running"
+
+
+if __name__ == "__main__":
+    from threading import Thread
+
+    def run_bot():
+        bot.infinity_polling()
+
+    Thread(target=run_bot).start()
+
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
