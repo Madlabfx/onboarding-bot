@@ -1,85 +1,71 @@
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
 
-# Read secrets from environment (IMPORTANT)
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-VIP_LINK = os.getenv("VIP_LINK")
+VIP_LINK = "https://t.me/yourVIPgroup"
+
+bot = telebot.TeleBot(TOKEN)
 
 
-# START MESSAGE
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Welcome!\n\n"
-        "To join our VIP group:\n"
-        "1. Open & fund your trading account\n"
-        "2. Send a screenshot here\n\n"
-        "We manually review all submissions."
+# ================= START =================
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.send_message(
+        message.chat.id,
+        "Welcome to Madlab Trading 🚀\n\n"
+        "To access VIP signals:\n\n"
+        "1. Open a broker account\n"
+        "2. Deposit minimum $300\n"
+        "3. Send screenshot using /submit\n\n"
+        "BlackBull (NZ only):\n"
+        "https://blackbull.com/en/live-account/?cmp=5p0z2d3q&refid=6509\n\n"
+        "HeroFX:\n"
+        "https://herofx.co/?partner_code=4649955"
     )
 
 
-# RECEIVE SCREENSHOT
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.message.from_user
+# ================= SUBMIT =================
+@bot.message_handler(commands=['submit'])
+def submit(message):
+    bot.send_message(message.chat.id, "Please send your screenshot 📸")
 
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve_{user.id}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"reject_{user.id}")
-        ]
-    ])
 
-    photo = update.message.photo[-1].file_id
+# ================= HANDLE PHOTO =================
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    file_id = message.photo[-1].file_id
 
-    await context.bot.send_photo(
-        chat_id=ADMIN_ID,
-        photo=photo,
-        caption=f"New user:\n{user.first_name}\n@{user.username}\nID: {user.id}",
-        reply_markup=keyboard
+    markup = InlineKeyboardMarkup()
+    approve = InlineKeyboardButton("✅ Approve", callback_data=f"approve_{message.chat.id}")
+    decline = InlineKeyboardButton("❌ Decline", callback_data=f"decline_{message.chat.id}")
+    markup.add(approve, decline)
+
+    bot.send_photo(
+        ADMIN_ID,
+        file_id,
+        caption=f"New verification request\nUser: {message.chat.id}",
+        reply_markup=markup
     )
 
-    await update.message.reply_text("📩 Received. Waiting for approval.")
+    bot.send_message(message.chat.id, "Screenshot received ✅ under review")
 
 
-# BUTTON HANDLER
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    action, user_id = query.data.split("_")
+# ================= ADMIN ACTION =================
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handler(call):
+    action, user_id = call.data.split("_")
     user_id = int(user_id)
 
-    if query.from_user.id != ADMIN_ID:
-        return
-
     if action == "approve":
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"✅ Approved!\n\nHere is your VIP access:\n{VIP_LINK}"
-        )
-        await query.edit_message_caption(query.message.caption + "\n\nAPPROVED")
+        bot.send_message(user_id, f"Approved 🎉\n\nVIP Access:\n{VIP_LINK}")
+        bot.answer_callback_query(call.id, "Approved")
 
-    elif action == "reject":
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="❌ Not approved. Please try again with valid proof."
-        )
-        await query.edit_message_caption(query.message.caption + "\n\nREJECTED")
+    elif action == "decline":
+        bot.send_message(user_id, "Not approved ❌ Please resend clearer proof.")
+        bot.answer_callback_query(call.id, "Declined")
 
 
-# MAIN APP
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-app.add_handler(CallbackQueryHandler(button_handler))
-
-app.run_polling()
+# ================= RUN BOT =================
+bot.infinity_polling()
